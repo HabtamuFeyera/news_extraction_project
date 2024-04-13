@@ -3,6 +3,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 from openpyxl import Workbook
 import os
 import re
@@ -12,7 +13,7 @@ class NewsExtractor:
     def __init__(self, url):
         self.url = url
         self.driver = webdriver.Chrome()
-        self.wait = WebDriverWait(self.driver, 10)
+        self.wait = WebDriverWait(self.driver, 30)  # Increased timeout to 30 seconds
         self.wb = Workbook()
         self.ws = self.wb.active
         self.ws.append(["Title", "Date", "Description", "Picture Filename", "Search Phrase Count", "Money Presence"])
@@ -26,13 +27,20 @@ class NewsExtractor:
         search_field.send_keys(Keys.RETURN)
 
         if category:
-            category_link = self.wait.until(EC.presence_of_element_located((By.XPATH, f"//a[contains(text(), '{category}')]")))
-            category_link.click()
+            try:
+                category_link = self.wait.until(EC.presence_of_element_located((By.XPATH, f"//a[contains(text(), '{category}')]")))
+                category_link.click()
+            except TimeoutException:
+                print(f"Category '{category}' not found.")
 
         start_date = self.get_start_date(num_months)
 
         while True:
-            articles = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, "//h2[contains(@class, 'title')]")))
+            try:
+                articles = self.wait.until(EC.presence_of_all_elements_located((By.XPATH, "//h2[contains(@class, 'title')]")))
+            except TimeoutException:
+                print("No more articles found.")
+                break
 
             for article in articles:
                 title = article.text.strip()
@@ -74,7 +82,8 @@ class NewsExtractor:
             next_page_button = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@aria-label, 'Next page')]")))
             next_page_button.click()
             return True
-        except:
+        except TimeoutException:
+            print("Next page button not found.")
             return False
 
     def close_driver(self):
